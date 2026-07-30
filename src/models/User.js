@@ -176,13 +176,14 @@ UserSchema.methods.comparePassword = async function (enteredPassword) {
 
 // Instance method to generate Access Token
 UserSchema.methods.generateAccessToken = function () {
+  const secret = process.env.JWT_SECRET || 'fallback_jwt_access_secret_key_123';
   return jwt.sign(
     {
       id: this._id,
       email: this.email,
       role: this.role,
     },
-    process.env.JWT_SECRET,
+    secret,
     {
       expiresIn: process.env.JWT_EXPIRY || '7d',
     }
@@ -191,11 +192,12 @@ UserSchema.methods.generateAccessToken = function () {
 
 // Instance method to generate Refresh Token
 UserSchema.methods.generateRefreshToken = function () {
+  const secret = process.env.JWT_REFRESH_SECRET || process.env.JWT_SECRET || 'fallback_jwt_refresh_secret_key_123';
   return jwt.sign(
     {
       id: this._id,
     },
-    process.env.JWT_REFRESH_SECRET,
+    secret,
     {
       expiresIn: process.env.JWT_REFRESH_EXPIRY || '30d',
     }
