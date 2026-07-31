@@ -182,7 +182,7 @@ UserSchema.methods.generateAccessToken = function () {
       email: this.email,
       role: this.role,
     },
-    process.env.JWT_SECRET,
+    process.env.JWT_SECRET || 'your_jwt_secret_key_change_in_production',
     {
       expiresIn: process.env.JWT_EXPIRY || '7d',
     }
@@ -195,7 +195,7 @@ UserSchema.methods.generateRefreshToken = function () {
     {
       id: this._id,
     },
-    process.env.JWT_REFRESH_SECRET,
+    process.env.JWT_REFRESH_SECRET || 'your_jwt_refresh_secret_key_change_in_production',
     {
       expiresIn: process.env.JWT_REFRESH_EXPIRY || '30d',
     }
