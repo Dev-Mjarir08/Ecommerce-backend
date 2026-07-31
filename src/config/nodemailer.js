@@ -1,7 +1,11 @@
 import nodemailer from 'nodemailer';
+import dns from 'dns';
 import dotenv from 'dotenv';
 
-dotenv.config();
+// Force Node.js to prefer IPv4 over IPv6 (fixes ENETUNREACH on Render/Cloud hosts)
+if (dns.setDefaultResultOrder) {
+  dns.setDefaultResultOrder('ipv4first');
+}
 
 const smtpUser = process.env.EMAIL_USER || process.env.SMTP_MAIL;
 const smtpPass = process.env.EMAIL_PASS || process.env.SMTP_PASSWORD;
@@ -18,17 +22,19 @@ const transporterConfig = process.env.SMTP_HOST && process.env.SMTP_HOST !== 'sm
       secure: smtpPort === 465,
       auth: { user: smtpUser, pass: smtpPass },
       tls: { rejectUnauthorized: false },
-      connectionTimeout: 10000,
-      greetingTimeout: 10000,
-      socketTimeout: 10000,
+      family: 4,
+      connectionTimeout: 15000,
+      greetingTimeout: 15000,
+      socketTimeout: 15000,
     }
   : {
       service: 'gmail',
       auth: { user: smtpUser, pass: smtpPass },
       tls: { rejectUnauthorized: false },
-      connectionTimeout: 10000,
-      greetingTimeout: 10000,
-      socketTimeout: 10000,
+      family: 4,
+      connectionTimeout: 15000,
+      greetingTimeout: 15000,
+      socketTimeout: 15000,
     };
 
 const transporter = nodemailer.createTransport(transporterConfig);

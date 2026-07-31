@@ -2,8 +2,15 @@ import dotenv from 'dotenv';
 import connectDB from './config/db.js';
 import app from './app.js';
 
+import dns from 'dns';
+
 // Load environment variables immediately on startup
 dotenv.config();
+
+// Prefer IPv4 over IPv6 to prevent ENETUNREACH errors on cloud hostings like Render
+if (dns.setDefaultResultOrder) {
+  dns.setDefaultResultOrder('ipv4first');
+}
 
 const PORT = process.env.PORT || 3000;
 
