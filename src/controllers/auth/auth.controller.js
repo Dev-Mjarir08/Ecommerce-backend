@@ -6,6 +6,8 @@ import asyncHandler from '../../utils/asyncHandler.js';
 import generateTokensAndSetCookies from '../../utils/generateToken.js';
 import User from '../../models/User.js';
 import jwt from 'jsonwebtoken';
+import { verifyTransporter } from '../../config/nodemailer.js';
+import sendEmail from '../../utils/sendEmail.js';
 
 /**
  * Controller class handling HTTP requests for user authentication operations.
@@ -20,13 +22,11 @@ class AuthController {
     const { user, otp } = await authService.registerUser({ name, email, phone, password });
     const { accessToken, refreshToken } = await generateTokensAndSetCookies(user, res);
 
-    // Async mail dispatch (non-blocking)
-    emailService.sendWelcomeEmail(user.email, user.name).catch((err) => {
-      console.error(`Welcome email dispatch failed for ${user.email}:`, err.message);
-    });
-    emailService.sendOtpEmail(user.email, user.name, otp).catch((err) => {
-      console.error(`OTP email dispatch failed for ${user.email}:`, err.message);
-    });
+    // Await email dispatches so Render / Vercel container keeps socket alive until completed
+    await Promise.allSettled([
+      emailService.sendWelcomeEmail(user.email, user.name),
+      emailService.sendOtpEmail(user.email, user.name, otp),
+    ]);
 
     res.status(201).json(
       new ApiResponse(201, { user, accessToken, refreshToken }, 'User registered successfully. Verification OTP sent to email.')
@@ -58,8 +58,8 @@ class AuthController {
 
     const { accessToken, refreshToken } = await generateTokensAndSetCookies(user, res);
 
-    // Welcome email dispatch (non-blocking)
-    emailService.sendWelcomeEmail(user.email, user.name).catch((err) => {
+    // Await welcome email dispatch
+    await emailService.sendWelcomeEmail(user.email, user.name).catch((err) => {
       console.error(`Welcome email dispatch failed for ${user.email}:`, err.message);
     });
 
@@ -94,10 +94,11 @@ class AuthController {
     }
 
     // Clear client cookies
+    const isProduction = process.env.NODE_ENV === 'production';
     const cookieOptions = {
       httpOnly: true,
-      secure: process.env.NODE_ENV === 'production',
-      sameSite: 'strict',
+      secure: isProduction,
+      sameSite: isProduction ? 'none' : 'lax',
     };
 
     res.clearCookie('accessToken', cookieOptions);
@@ -116,11 +117,12 @@ class AuthController {
 
     const { user, resetToken } = await authService.generateResetToken(email);
 
-    // Construct reset URL
-    const resetUrl = `${req.protocol}://${req.get('host')}/api/v1/auth/reset-password/${resetToken}`;
+    // Construct reset URL pointing to frontend client application
+    const clientUrl = (process.env.CLIENT_URL || 'http://localhost:5173').replace(/\/+$/, '');
+    const resetUrl = `${clientUrl}/reset-password/${resetToken}`;
 
-    // Async mail dispatch
-    emailService.sendForgotPasswordEmail(user.email, user.name, resetUrl).catch((err) => {
+    // Await email dispatch to ensure completion before API response finishes
+    await emailService.sendForgotPasswordEmail(user.email, user.name, resetUrl).catch((err) => {
       console.error(`Forgot password email dispatch failed for ${user.email}:`, err.message);
     });
 
@@ -136,10 +138,14 @@ class AuthController {
     const { token } = req.params;
     const { password } = req.body;
 
+    if (!password || password.length < 6) {
+      throw new ApiError(400, 'New password must be at least 6 characters long.');
+    }
+
     const user = await authService.resetUserPassword(token, password);
 
-    // Async mail alert dispatch
-    emailService.sendPasswordResetSuccessEmail(user.email, user.name).catch((err) => {
+    // Await alert email dispatch
+    await emailService.sendPasswordResetSuccessEmail(user.email, user.name).catch((err) => {
       console.error(`Password reset success alert dispatch failed for ${user.email}:`, err.message);
     });
 
@@ -160,10 +166,14 @@ class AuthController {
       throw new ApiError(400, 'Current password is required.');
     }
 
+    if (!newPassword || newPassword.length < 6) {
+      throw new ApiError(400, 'New password must be at least 6 characters long.');
+    }
+
     const user = await authService.changeUserPassword(userId, oldPassword, newPassword);
 
-    // Async mail alert dispatch
-    emailService.sendPasswordResetSuccessEmail(user.email, user.name).catch((err) => {
+    // Await alert email dispatch
+    await emailService.sendPasswordResetSuccessEmail(user.email, user.name).catch((err) => {
       console.error(`Password change success alert dispatch failed for ${user.email}:`, err.message);
     });
 
@@ -201,13 +211,68 @@ class AuthController {
 
     const { user, otp } = await authService.resendOtp(userId, userEmail);
 
-    emailService.sendOtpEmail(user.email, user.name, otp).catch((err) => {
+    // Await OTP email dispatch
+    await emailService.sendOtpEmail(user.email, user.name, otp).catch((err) => {
       console.error(`Resend OTP email dispatch failed for ${user.email}:`, err.message);
     });
 
     res.status(200).json(
       new ApiResponse(200, null, 'Verification OTP sent to your email.')
     );
+  });
+
+  /**
+   * Health Check & Test Email Endpoint: GET /api/v1/auth/email/test
+   */
+  testEmail = asyncHandler(async (req, res) => {
+    const targetEmail = (req.query.to || req.body?.email || process.env.SMTP_MAIL || process.env.EMAIL_USER || 'multanijarir08@gmail.com').toString().trim();
+    let smtpConnected = false;
+    let sendMailSuccess = false;
+    let messageId = '';
+    let responseText = '';
+    let errorDetail = null;
+
+    try {
+      smtpConnected = await verifyTransporter();
+      const info = await sendEmail({
+        email: targetEmail,
+        subject: '🧪 Render SMTP Health Check - Croma Clone',
+        html: `
+          <div style="font-family: Arial, sans-serif; max-width: 600px; margin: auto; padding: 20px; border: 1px solid #e2e8f0; border-radius: 12px; background-color: #ffffff;">
+            <h2 style="color: #2563eb; margin-top: 0;">Render Email Gateway Verification</h2>
+            <p style="color: #334155;">This is an automated test email confirming that your Nodemailer SMTP transport is configured correctly on Render.</p>
+            <div style="background-color: #f8fafc; padding: 14px; border-radius: 8px; font-size: 13px; color: #475569;">
+              <p style="margin: 4px 0;"><strong>Recipient:</strong> ${targetEmail}</p>
+              <p style="margin: 4px 0;"><strong>Timestamp:</strong> ${new Date().toISOString()}</p>
+              <p style="margin: 4px 0;"><strong>Environment:</strong> ${process.env.NODE_ENV || 'production'}</p>
+              <p style="margin: 4px 0;"><strong>SMTP Host:</strong> ${process.env.SMTP_HOST || 'smtp.gmail.com'}</p>
+              <p style="margin: 4px 0;"><strong>SMTP Port:</strong> ${process.env.SMTP_PORT || '587'}</p>
+            </div>
+            <p style="color: #64748b; font-size: 12px; margin-top: 20px;">© Croma Electronics. All rights reserved.</p>
+          </div>
+        `,
+      });
+      sendMailSuccess = true;
+      messageId = info.messageId || '';
+      responseText = info.response || '';
+    } catch (err) {
+      errorDetail = {
+        name: err.name || 'Error',
+        code: err.code || 'UNKNOWN_CODE',
+        message: err.message,
+        response: err.response || null,
+        stack: err.stack,
+      };
+    }
+
+    res.status(sendMailSuccess ? 200 : 500).json({
+      success: sendMailSuccess,
+      smtpConnected,
+      sendMail: sendMailSuccess,
+      messageId,
+      response: responseText,
+      error: errorDetail,
+    });
   });
 
   /**
@@ -230,7 +295,10 @@ class AuthController {
     }
 
     try {
-      const decoded = jwt.verify(rToken, process.env.JWT_REFRESH_SECRET);
+      const secret = (process.env.JWT_REFRESH_SECRET && process.env.JWT_REFRESH_SECRET.trim())
+        ? process.env.JWT_REFRESH_SECRET.trim()
+        : ((process.env.JWT_SECRET && process.env.JWT_SECRET.trim()) ? process.env.JWT_SECRET.trim() : 'fallback_jwt_refresh_secret_key_123');
+      const decoded = jwt.verify(rToken, secret);
       const user = await User.findById(decoded.id).select('+refreshToken');
 
       if (!user || user.refreshToken !== rToken) {

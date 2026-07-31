@@ -11,6 +11,7 @@ import notFound from './middlewares/notFound.middleware.js';
 import errorHandler from './middlewares/error.middleware.js';
 import mongoSanitize from './middlewares/sanitize.middleware.js';
 import authRoutes from './routes/auth.routes.js';
+import authController from './controllers/auth/auth.controller.js';
 import userRoutes from './routes/user.routes.js';
 import categoryRoutes from './routes/category.routes.js';
 import productRoutes from './routes/product.routes.js';
@@ -21,9 +22,11 @@ import couponRoutes from './routes/coupon.routes.js';
 import bannerRoutes from './routes/banner.routes.js';
 import dashboardRoutes from './routes/dashboard.routes.js';
 import paymentRoutes from './routes/payment.routes.js';
-import sendEmail from './utils/sendEmail.js';
 
 const app = express();
+
+// Trust reverse proxies (Vercel, Render, Heroku, Nginx) for rate limiting & IP extraction
+app.set('trust proxy', 1);
 
 // 1. Logger Middleware (Morgan)
 if (process.env.NODE_ENV === 'development') {
@@ -33,24 +36,31 @@ if (process.env.NODE_ENV === 'development') {
 }
 
 // 2. Security Middlewares
-app.use(helmet());
+app.use(helmet({
+  crossOriginResourcePolicy: { policy: 'cross-origin' },
+}));
 
-// 3. CORS Configuration
+// 3. CORS Configuration - Dynamically allow requesting origin (supports Vercel previews & production)
 const corsOptions = {
-  origin: process.env.CLIENT_URL || 'http://localhost:5173',
+  origin: (origin, callback) => {
+    if (!origin) return callback(null, true);
+    return callback(null, origin);
+  },
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With', 'Accept'],
+  optionsSuccessStatus: 200,
 };
+
 app.use(cors(corsOptions));
 
-// 4. Rate Limiting Middleware
+// 4. Rate Limiting Middleware (Skip OPTIONS preflight requests)
 const limiter = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 minutes
-  max: process.env.NODE_ENV === 'production' ? 100 : 10000, // High threshold in dev
-  standardHeaders: true, // Return rate limit info in the `RateLimit-*` headers
-  legacyHeaders: false, // Disable the `X-RateLimit-*` headers
-  skip: () => process.env.NODE_ENV !== 'production', // Skip rate limiting in development
+  max: process.env.NODE_ENV === 'production' ? 100 : 10000,
+  standardHeaders: true,
+  legacyHeaders: false,
+  skip: (req) => req.method === 'OPTIONS' || process.env.NODE_ENV !== 'production',
   message: {
     success: false,
     message: 'Too many requests from this IP, please try again after 15 minutes.',
@@ -58,13 +68,13 @@ const limiter = rateLimit({
 });
 app.use('/api', limiter);
 
-// Stricter rate limiter for authentication routes (brute-force protection)
+// Stricter rate limiter for authentication routes (brute-force protection, skip OPTIONS)
 const authLimiter = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 minutes
   max: process.env.NODE_ENV === 'production' ? 15 : 100,
   standardHeaders: true,
   legacyHeaders: false,
-  skip: () => process.env.NODE_ENV !== 'production', // Skip rate limiting in development
+  skip: (req) => req.method === 'OPTIONS' || process.env.NODE_ENV !== 'production',
   message: {
     success: false,
     message: 'Too many authentication attempts. Please try again after 15 minutes.',
@@ -116,7 +126,10 @@ app.use('/api/v1/banners', bannerRoutes);
 app.use('/api/v1/dashboard', dashboardRoutes);
 app.use('/api/v1/payments', paymentRoutes);
 
-// 7. Basic Uptime Health Checks
+// 7. Basic Uptime & Email Health Checks
+app.get('/api/v1/health/email', authController.testEmail);
+app.get('/api/v1/email/test', authController.testEmail);
+app.get('/api/email/test', authController.testEmail);
 app.get('/api/v1/health', (req, res) => {
   res.status(200).json({
     success: true,
@@ -124,48 +137,6 @@ app.get('/api/v1/health', (req, res) => {
     timestamp: new Date().toISOString(),
     uptime: process.uptime(),
   });
-});
-
-// Email Health & Diagnostic Check
-app.all('/api/v1/health/email', async (req, res) => {
-  try {
-    const recipient = req.query.to || req.body?.to || process.env.EMAIL_USER || process.env.SMTP_MAIL;
-    if (!recipient) {
-      return res.status(400).json({
-        success: false,
-        message: 'Recipient email is required. Pass ?to=user@example.com in query or JSON body.',
-      });
-    }
-
-    const info = await sendEmail({
-      email: recipient,
-      subject: '🧪 Croma E-Commerce - Health Check & Email Diagnostic',
-      html: `
-        <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #e0e0e0; border-radius: 8px;">
-          <h2 style="color: #008080; margin-top: 0;">✅ SMTP Email Service Healthy</h2>
-          <p>This is a test verification email sent from your Croma E-commerce API backend server.</p>
-          <hr style="border: none; border-top: 1px solid #eee; margin: 20px 0;" />
-          <p><strong>Recipient:</strong> ${recipient}</p>
-          <p><strong>Timestamp:</strong> ${new Date().toISOString()}</p>
-          <p><strong>Node Environment:</strong> ${process.env.NODE_ENV || 'development'}</p>
-          <p style="color: #777; font-size: 12px; margin-top: 20px;">If you received this email, your Nodemailer & SMTP configuration is working correctly.</p>
-        </div>
-      `,
-    });
-
-    return res.status(200).json({
-      success: true,
-      message: `Test email sent successfully to ${recipient}`,
-      messageId: info.messageId,
-      response: info.response,
-    });
-  } catch (error) {
-    return res.status(500).json({
-      success: false,
-      message: 'Failed to send test email',
-      error: error.message,
-    });
-  }
 });
 
 // Root Route

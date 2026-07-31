@@ -16,10 +16,11 @@ const generateTokensAndSetCookies = async (user, res) => {
   await user.save({ validateBeforeSave: false });
 
   // Cookie options
+  const isProduction = process.env.NODE_ENV === 'production';
   const cookieOptions = {
     httpOnly: true,
-    secure: process.env.NODE_ENV === 'production',
-    sameSite: 'strict',
+    secure: isProduction,
+    sameSite: isProduction ? 'none' : 'lax',
     maxAge: (parseInt(process.env.COOKIE_EXPIRE_DAYS) || 7) * 24 * 60 * 60 * 1000,
   };
 

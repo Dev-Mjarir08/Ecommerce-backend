@@ -19,7 +19,11 @@ class EmailService {
         <p style="color: #666; font-size: 12px; text-align: center; margin-top: 50px;">This email is auto-generated. Please do not reply directly.</p>
       </div>
     `;
-    await sendEmail({ email, subject: 'Welcome to Croma Clone!', html });
+    try {
+      await sendEmail({ email, subject: 'Welcome to Croma Clone!', html });
+    } catch (err) {
+      console.error(`⚠️ [NODEMAILER WARN] Welcome email dispatch to ${email} failed:`, err.message);
+    }
   }
 
   /**
@@ -38,7 +42,11 @@ class EmailService {
         <p style="color: #666; font-size: 12px; text-align: center; margin-top: 50px;">This email is auto-generated. Please do not reply directly.</p>
       </div>
     `;
-    await sendEmail({ email, subject: 'Croma Clone - Reset Password Request', html });
+    try {
+      await sendEmail({ email, subject: 'Croma Clone - Reset Password Request', html });
+    } catch (err) {
+      console.error(`⚠️ [NODEMAILER WARN] Password reset email dispatch to ${email} failed:`, err.message);
+    }
   }
 
   /**
@@ -54,7 +62,11 @@ class EmailService {
         <p style="color: #666; font-size: 12px; text-align: center; margin-top: 50px;">This email is auto-generated. Please do not reply directly.</p>
       </div>
     `;
-    await sendEmail({ email, subject: 'Croma Clone - Password Security Alert', html });
+    try {
+      await sendEmail({ email, subject: 'Croma Clone - Password Security Alert', html });
+    } catch (err) {
+      console.error(`⚠️ [NODEMAILER WARN] Password reset success alert to ${email} failed:`, err.message);
+    }
   }
 
   /**

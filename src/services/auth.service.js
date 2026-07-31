@@ -56,7 +56,9 @@ class AuthService {
       return user; // Already verified
     }
 
-    if (!user.otp || user.otp !== otpInput) {
+    const cleanOtp = otpInput ? otpInput.toString().trim() : '';
+
+    if (!user.otp || user.otp.toString().trim() !== cleanOtp) {
       throw new ApiError(400, 'Invalid OTP code entered.');
     }
 

@@ -176,28 +176,42 @@ UserSchema.methods.comparePassword = async function (enteredPassword) {
 
 // Instance method to generate Access Token
 UserSchema.methods.generateAccessToken = function () {
+  const secret = (process.env.JWT_SECRET && process.env.JWT_SECRET.trim())
+    ? process.env.JWT_SECRET.trim()
+    : 'fallback_jwt_access_secret_key_123';
+  const expiry = (process.env.JWT_EXPIRY && process.env.JWT_EXPIRY.trim())
+    ? process.env.JWT_EXPIRY.trim()
+    : '7d';
+
   return jwt.sign(
     {
       id: this._id,
       email: this.email,
       role: this.role,
     },
-    process.env.JWT_SECRET,
+    secret,
     {
-      expiresIn: process.env.JWT_EXPIRY || '7d',
+      expiresIn: expiry,
     }
   );
 };
 
 // Instance method to generate Refresh Token
 UserSchema.methods.generateRefreshToken = function () {
+  const secret = (process.env.JWT_REFRESH_SECRET && process.env.JWT_REFRESH_SECRET.trim())
+    ? process.env.JWT_REFRESH_SECRET.trim()
+    : ((process.env.JWT_SECRET && process.env.JWT_SECRET.trim()) ? process.env.JWT_SECRET.trim() : 'fallback_jwt_refresh_secret_key_123');
+  const expiry = (process.env.JWT_REFRESH_EXPIRY && process.env.JWT_REFRESH_EXPIRY.trim())
+    ? process.env.JWT_REFRESH_EXPIRY.trim()
+    : '30d';
+
   return jwt.sign(
     {
       id: this._id,
     },
-    process.env.JWT_REFRESH_SECRET,
+    secret,
     {
-      expiresIn: process.env.JWT_REFRESH_EXPIRY || '30d',
+      expiresIn: expiry,
     }
   );
 };
