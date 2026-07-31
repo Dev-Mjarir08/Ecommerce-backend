@@ -1,5 +1,6 @@
 import nodemailer from 'nodemailer';
 import dotenv from 'dotenv';
+import dns from 'dns';
 
 dotenv.config();
 
@@ -10,9 +11,22 @@ const smtpHost = (process.env.SMTP_HOST || 'smtp.gmail.com').trim();
 const smtpPort = parseInt(process.env.SMTP_PORT || '587', 10);
 const isSecure = process.env.SMTP_SECURE === 'true' || smtpPort === 465;
 
+// Force Node.js DNS resolver to ONLY return IPv4 addresses for SMTP host.
+// Prevents ENETUNREACH / ETIMEDOUT errors on cloud providers (Render, Vercel) that lack IPv6 outbound routing.
+const forceIPv4Lookup = (hostname, options, callback) => {
+  let opts = { family: 4, all: false };
+  let cb = callback;
+  if (typeof options === 'function') {
+    cb = options;
+  } else if (typeof options === 'object' && options !== null) {
+    opts = { ...options, family: 4, all: false };
+  }
+  return dns.lookup(hostname, opts, cb);
+};
+
 // Creates and configures a production-ready Nodemailer pooled transporter.
 // Enables TCP connection pooling so open sockets are reused across email dispatches.
-// Uses STARTTLS (Port 587) by default for cloud hosts (Render/Vercel) to prevent Port 465 SSL firewall drops.
+// Uses STARTTLS (Port 587) or SSL (Port 465) forced to IPv4 addressing.
 const transporterOptions = {
   pool: true, // Reuse open TCP/TLS connections for super-fast delivery
   maxConnections: 5, // Maximum concurrent pooled SMTP connections
@@ -28,7 +42,8 @@ const transporterOptions = {
     rejectUnauthorized: false,
     minVersion: 'TLSv1.2',
   },
-  family: 4, // FORCE IPv4 ONLY: Prevents Render cloud servers from attempting IPv6 connections which cause ETIMEDOUT stalls
+  lookup: forceIPv4Lookup, // CRITICAL FOR RENDER: Overrides DNS lookup to guarantee IPv4 socket connection
+  family: 4,
   connectionTimeout: 15000,
   greetingTimeout: 15000,
   socketTimeout: 15000,
