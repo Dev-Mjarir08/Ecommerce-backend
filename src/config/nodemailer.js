@@ -4,12 +4,22 @@ import dns from 'dns';
 
 dotenv.config();
 
+// Globally instruct Node.js to prefer IPv4 DNS resolution over IPv6
+if (dns && dns.setDefaultResultOrder) {
+  dns.setDefaultResultOrder('ipv4first');
+}
+
 // Sanitize & normalize configuration credentials
 const smtpUser = (process.env.SMTP_USER || process.env.EMAIL_USER || process.env.SMTP_MAIL || '').trim();
 const smtpPass = (process.env.SMTP_PASS || process.env.EMAIL_PASS || process.env.SMTP_PASSWORD || '').trim();
 const smtpHost = (process.env.SMTP_HOST || 'smtp.gmail.com').trim();
-const smtpPort = parseInt(process.env.SMTP_PORT || '587', 10);
-const isSecure = process.env.SMTP_SECURE === 'true' || smtpPort === 465;
+
+// On cloud hosting (Render / Vercel), Port 465 SSL is blocked by outbound network firewalls.
+// Force Port 587 with STARTTLS (secure: false) on cloud environments for Gmail.
+const isCloudHost = !!(process.env.RENDER || process.env.VERCEL || process.env.NODE_ENV === 'production');
+const rawPort = parseInt(process.env.SMTP_PORT || '587', 10);
+const smtpPort = (isCloudHost && smtpHost.includes('gmail')) ? 587 : rawPort;
+const isSecure = (isCloudHost && smtpHost.includes('gmail')) ? false : (process.env.SMTP_SECURE === 'true' || rawPort === 465);
 
 // Force Node.js DNS resolver to ONLY return IPv4 addresses for SMTP host.
 // Prevents ENETUNREACH / ETIMEDOUT errors on cloud providers (Render, Vercel) that lack IPv6 outbound routing.
