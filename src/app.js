@@ -24,9 +24,6 @@ import paymentRoutes from './routes/payment.routes.js';
 
 const app = express();
 
-// Trust reverse proxies (Vercel, Render, Heroku, Nginx) for rate limiting & IP extraction
-app.set('trust proxy', 1);
-
 // 1. Logger Middleware (Morgan)
 if (process.env.NODE_ENV === 'development') {
   app.use(morgan('dev'));
@@ -35,45 +32,15 @@ if (process.env.NODE_ENV === 'development') {
 }
 
 // 2. Security Middlewares
-app.use(helmet({
-  crossOriginResourcePolicy: { policy: 'cross-origin' },
-}));
+app.use(helmet());
 
 // 3. CORS Configuration
-const allowedOrigins = [
-  'http://localhost:5173',
-  'http://localhost:3000',
-  'http://localhost:5174',
-  'https://react-pr-13-frontend.vercel.app',
-  process.env.CLIENT_URL,
-].filter(Boolean).map((url) => url.trim().replace(/\/+$/, ''));
-
 const corsOptions = {
-  origin: (origin, callback) => {
-    // Allow non-browser requests (mobile apps, Postman, curl)
-    if (!origin) return callback(null, true);
-
-    const cleanOrigin = origin.trim().replace(/\/+$/, '');
-
-    const isAllowed =
-      allowedOrigins.includes(cleanOrigin) ||
-      allowedOrigins.includes('*') ||
-      cleanOrigin.endsWith('.vercel.app') ||
-      cleanOrigin.includes('localhost') ||
-      process.env.NODE_ENV !== 'production';
-
-    if (isAllowed) {
-      return callback(null, true);
-    }
-
-    return callback(null, true);
-  },
+  origin: process.env.CLIENT_URL || 'http://localhost:5173',
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With', 'Accept'],
-  optionsSuccessStatus: 200,
 };
-
 app.use(cors(corsOptions));
 
 // 4. Rate Limiting Middleware

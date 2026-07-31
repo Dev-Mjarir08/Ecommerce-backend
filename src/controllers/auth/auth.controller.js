@@ -94,11 +94,10 @@ class AuthController {
     }
 
     // Clear client cookies
-    const isProduction = process.env.NODE_ENV === 'production';
     const cookieOptions = {
       httpOnly: true,
-      secure: isProduction,
-      sameSite: isProduction ? 'none' : 'lax',
+      secure: process.env.NODE_ENV === 'production',
+      sameSite: 'strict',
     };
 
     res.clearCookie('accessToken', cookieOptions);
@@ -231,8 +230,7 @@ class AuthController {
     }
 
     try {
-      const secret = process.env.JWT_REFRESH_SECRET || process.env.JWT_SECRET || 'fallback_jwt_refresh_secret_key_123';
-      const decoded = jwt.verify(rToken, secret);
+      const decoded = jwt.verify(rToken, process.env.JWT_REFRESH_SECRET);
       const user = await User.findById(decoded.id).select('+refreshToken');
 
       if (!user || user.refreshToken !== rToken) {
