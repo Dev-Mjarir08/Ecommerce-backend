@@ -21,6 +21,7 @@ import couponRoutes from './routes/coupon.routes.js';
 import bannerRoutes from './routes/banner.routes.js';
 import dashboardRoutes from './routes/dashboard.routes.js';
 import paymentRoutes from './routes/payment.routes.js';
+import sendEmail from './utils/sendEmail.js';
 
 const app = express();
 
@@ -123,6 +124,48 @@ app.get('/api/v1/health', (req, res) => {
     timestamp: new Date().toISOString(),
     uptime: process.uptime(),
   });
+});
+
+// Email Health & Diagnostic Check
+app.all('/api/v1/health/email', async (req, res) => {
+  try {
+    const recipient = req.query.to || req.body?.to || process.env.EMAIL_USER || process.env.SMTP_MAIL;
+    if (!recipient) {
+      return res.status(400).json({
+        success: false,
+        message: 'Recipient email is required. Pass ?to=user@example.com in query or JSON body.',
+      });
+    }
+
+    const info = await sendEmail({
+      email: recipient,
+      subject: '🧪 Croma E-Commerce - Health Check & Email Diagnostic',
+      html: `
+        <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #e0e0e0; border-radius: 8px;">
+          <h2 style="color: #008080; margin-top: 0;">✅ SMTP Email Service Healthy</h2>
+          <p>This is a test verification email sent from your Croma E-commerce API backend server.</p>
+          <hr style="border: none; border-top: 1px solid #eee; margin: 20px 0;" />
+          <p><strong>Recipient:</strong> ${recipient}</p>
+          <p><strong>Timestamp:</strong> ${new Date().toISOString()}</p>
+          <p><strong>Node Environment:</strong> ${process.env.NODE_ENV || 'development'}</p>
+          <p style="color: #777; font-size: 12px; margin-top: 20px;">If you received this email, your Nodemailer & SMTP configuration is working correctly.</p>
+        </div>
+      `,
+    });
+
+    return res.status(200).json({
+      success: true,
+      message: `Test email sent successfully to ${recipient}`,
+      messageId: info.messageId,
+      response: info.response,
+    });
+  } catch (error) {
+    return res.status(500).json({
+      success: false,
+      message: 'Failed to send test email',
+      error: error.message,
+    });
+  }
 });
 
 // Root Route
