@@ -11,19 +11,27 @@ const smtpPort = parseInt(process.env.SMTP_PORT || '465', 10);
 /**
  * Creates and configures a Nodemailer transporter using SMTP options from environment variables.
  */
-const transporter = nodemailer.createTransport({
-  service: process.env.SMTP_SERVICE || 'gmail',
-  host: smtpHost,
-  port: smtpPort,
-  secure: smtpPort === 465,
-  auth: {
-    user: smtpUser,
-    pass: smtpPass,
-  },
-  tls: {
-    rejectUnauthorized: false,
-  },
-});
+const transporterConfig = process.env.SMTP_HOST && process.env.SMTP_HOST !== 'smtp.gmail.com'
+  ? {
+      host: smtpHost,
+      port: smtpPort,
+      secure: smtpPort === 465,
+      auth: { user: smtpUser, pass: smtpPass },
+      tls: { rejectUnauthorized: false },
+      connectionTimeout: 10000,
+      greetingTimeout: 10000,
+      socketTimeout: 10000,
+    }
+  : {
+      service: 'gmail',
+      auth: { user: smtpUser, pass: smtpPass },
+      tls: { rejectUnauthorized: false },
+      connectionTimeout: 10000,
+      greetingTimeout: 10000,
+      socketTimeout: 10000,
+    };
+
+const transporter = nodemailer.createTransport(transporterConfig);
 
 // Verify connection on startup (development only — prevents startup delay in production)
 if (process.env.NODE_ENV !== 'production') {
