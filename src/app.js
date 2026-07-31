@@ -44,20 +44,21 @@ app.use(helmet({
 const corsOptions = {
   origin: (origin, callback) => {
     if (!origin) return callback(null, true);
+    // Allow process.env.CLIENT_URL or any requesting origin
     return callback(null, origin);
   },
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With', 'Accept'],
+  allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With', 'Accept', 'Origin'],
   optionsSuccessStatus: 200,
 };
 
 app.use(cors(corsOptions));
 
-// 4. Rate Limiting Middleware (Skip OPTIONS preflight requests)
+// 4. Rate Limiting Middleware (Generous limit to support reverse proxy shared IPs on Render/Vercel)
 const limiter = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 minutes
-  max: process.env.NODE_ENV === 'production' ? 100 : 10000,
+  max: process.env.NODE_ENV === 'production' ? 1000 : 10000,
   standardHeaders: true,
   legacyHeaders: false,
   skip: (req) => req.method === 'OPTIONS' || process.env.NODE_ENV !== 'production',
@@ -68,10 +69,10 @@ const limiter = rateLimit({
 });
 app.use('/api', limiter);
 
-// Stricter rate limiter for authentication routes (brute-force protection, skip OPTIONS)
+// Authentication rate limiter for brute-force protection
 const authLimiter = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 minutes
-  max: process.env.NODE_ENV === 'production' ? 15 : 100,
+  max: process.env.NODE_ENV === 'production' ? 200 : 1000,
   standardHeaders: true,
   legacyHeaders: false,
   skip: (req) => req.method === 'OPTIONS' || process.env.NODE_ENV !== 'production',

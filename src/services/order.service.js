@@ -21,7 +21,12 @@ class OrderService {
     user.orderOtpExpire = new Date(Date.now() + 10 * 60 * 1000); // 10 mins
     await user.save();
 
-    await emailService.sendOrderConfirmationOtpEmail(user.email, user.name, otp);
+    // Dispatch OTP email asynchronously in background for instant response
+    setImmediate(() => {
+      emailService.sendOrderConfirmationOtpEmail(user.email, user.name, otp).catch((err) => {
+        console.error(`Order OTP email dispatch failed for ${user.email}:`, err.message);
+      });
+    });
     return `Order confirmation OTP sent to ${user.email}.`;
   }
 
@@ -111,15 +116,17 @@ class OrderService {
     // 5. Clear cart
     await cartService.clearUserCart(userId);
 
-    // 6. Trigger Order Invoice Confirmation Email
-    try {
-      const fullUser = await User.findById(userId);
-      if (fullUser && fullUser.email) {
-        await emailService.sendOrderPlacedInvoiceEmail(fullUser.email, fullUser.name, order);
+    // 6. Trigger Order Invoice Confirmation Email in background (non-blocking)
+    setImmediate(async () => {
+      try {
+        const fullUser = await User.findById(userId);
+        if (fullUser && fullUser.email) {
+          await emailService.sendOrderPlacedInvoiceEmail(fullUser.email, fullUser.name, order);
+        }
+      } catch (emailErr) {
+        console.error('⚠️ Order confirmation email dispatch error:', emailErr.message);
       }
-    } catch (emailErr) {
-      console.error('⚠️ Order confirmation email dispatch error:', emailErr.message);
-    }
+    });
 
     return order;
   }

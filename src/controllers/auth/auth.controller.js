@@ -22,11 +22,13 @@ class AuthController {
     const { user, otp } = await authService.registerUser({ name, email, phone, password });
     const { accessToken, refreshToken } = await generateTokensAndSetCookies(user, res);
 
-    // Await email dispatches so Render / Vercel container keeps socket alive until completed
-    await Promise.allSettled([
-      emailService.sendWelcomeEmail(user.email, user.name),
-      emailService.sendOtpEmail(user.email, user.name, otp),
-    ]);
+    // Dispatch email sending asynchronously in background so API returns response instantly (<50ms)
+    setImmediate(() => {
+      Promise.allSettled([
+        emailService.sendWelcomeEmail(user.email, user.name),
+        emailService.sendOtpEmail(user.email, user.name, otp),
+      ]).catch((err) => console.error('Background registration email error:', err));
+    });
 
     res.status(201).json(
       new ApiResponse(201, { user, accessToken, refreshToken }, 'User registered successfully. Verification OTP sent to email.')
@@ -58,9 +60,11 @@ class AuthController {
 
     const { accessToken, refreshToken } = await generateTokensAndSetCookies(user, res);
 
-    // Await welcome email dispatch
-    await emailService.sendWelcomeEmail(user.email, user.name).catch((err) => {
-      console.error(`Welcome email dispatch failed for ${user.email}:`, err.message);
+    // Non-blocking background email dispatch
+    setImmediate(() => {
+      emailService.sendWelcomeEmail(user.email, user.name).catch((err) => {
+        console.error(`Welcome email dispatch failed for ${user.email}:`, err.message);
+      });
     });
 
     res.status(201).json(
@@ -121,9 +125,11 @@ class AuthController {
     const clientUrl = (process.env.CLIENT_URL || 'http://localhost:5173').replace(/\/+$/, '');
     const resetUrl = `${clientUrl}/reset-password/${resetToken}`;
 
-    // Await email dispatch to ensure completion before API response finishes
-    await emailService.sendForgotPasswordEmail(user.email, user.name, resetUrl).catch((err) => {
-      console.error(`Forgot password email dispatch failed for ${user.email}:`, err.message);
+    // Non-blocking background email dispatch for instant response
+    setImmediate(() => {
+      emailService.sendForgotPasswordEmail(user.email, user.name, resetUrl).catch((err) => {
+        console.error(`Forgot password email dispatch failed for ${user.email}:`, err.message);
+      });
     });
 
     res.status(200).json(
@@ -144,9 +150,11 @@ class AuthController {
 
     const user = await authService.resetUserPassword(token, password);
 
-    // Await alert email dispatch
-    await emailService.sendPasswordResetSuccessEmail(user.email, user.name).catch((err) => {
-      console.error(`Password reset success alert dispatch failed for ${user.email}:`, err.message);
+    // Non-blocking background email dispatch
+    setImmediate(() => {
+      emailService.sendPasswordResetSuccessEmail(user.email, user.name).catch((err) => {
+        console.error(`Password reset success alert dispatch failed for ${user.email}:`, err.message);
+      });
     });
 
     res.status(200).json(
@@ -172,9 +180,11 @@ class AuthController {
 
     const user = await authService.changeUserPassword(userId, oldPassword, newPassword);
 
-    // Await alert email dispatch
-    await emailService.sendPasswordResetSuccessEmail(user.email, user.name).catch((err) => {
-      console.error(`Password change success alert dispatch failed for ${user.email}:`, err.message);
+    // Non-blocking background email dispatch
+    setImmediate(() => {
+      emailService.sendPasswordResetSuccessEmail(user.email, user.name).catch((err) => {
+        console.error(`Password change success alert dispatch failed for ${user.email}:`, err.message);
+      });
     });
 
     res.status(200).json(
@@ -211,9 +221,11 @@ class AuthController {
 
     const { user, otp } = await authService.resendOtp(userId, userEmail);
 
-    // Await OTP email dispatch
-    await emailService.sendOtpEmail(user.email, user.name, otp).catch((err) => {
-      console.error(`Resend OTP email dispatch failed for ${user.email}:`, err.message);
+    // Non-blocking background OTP email dispatch
+    setImmediate(() => {
+      emailService.sendOtpEmail(user.email, user.name, otp).catch((err) => {
+        console.error(`Resend OTP email dispatch failed for ${user.email}:`, err.message);
+      });
     });
 
     res.status(200).json(

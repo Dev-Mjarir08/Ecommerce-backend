@@ -10,9 +10,13 @@ const smtpHost = (process.env.SMTP_HOST || 'smtp.gmail.com').trim();
 const smtpPort = parseInt(process.env.SMTP_PORT || '587', 10);
 const isSecure = process.env.SMTP_SECURE === 'true' || smtpPort === 465;
 
-// Creates and configures a production-ready Nodemailer transporter.
+// Creates and configures a production-ready Nodemailer pooled transporter.
+// Enables TCP connection pooling so open sockets are reused across email dispatches.
 // Uses STARTTLS (Port 587) by default for cloud hosts (Render/Vercel) to prevent Port 465 SSL firewall drops.
 const transporterOptions = {
+  pool: true, // Reuse open TCP/TLS connections for super-fast delivery
+  maxConnections: 5, // Maximum concurrent pooled SMTP connections
+  maxMessages: 100, // Reuse a single SMTP connection for up to 100 messages
   host: smtpHost,
   port: smtpPort,
   secure: isSecure, // false for port 587, true for port 465
@@ -22,17 +26,14 @@ const transporterOptions = {
   },
   tls: {
     rejectUnauthorized: false,
+    minVersion: 'TLSv1.2',
   },
+  family: 4, // FORCE IPv4 ONLY: Prevents Render cloud servers from attempting IPv6 connections which cause ETIMEDOUT stalls
   connectionTimeout: 15000,
   greetingTimeout: 15000,
   socketTimeout: 15000,
   dnsTimeout: 10000,
 };
-
-// Only attach service if not using custom host/port (service: 'gmail' forces port 465 SSL which Render blocks)
-if (process.env.SMTP_SERVICE && process.env.SMTP_SERVICE !== 'gmail') {
-  transporterOptions.service = process.env.SMTP_SERVICE;
-}
 
 const transporter = nodemailer.createTransport(transporterOptions);
 
