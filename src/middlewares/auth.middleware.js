@@ -25,10 +25,7 @@ const protect = asyncHandler(async (req, res, next) => {
 
   try {
     // Verify token
-    const decoded = jwt.verify(
-      token,
-      process.env.JWT_SECRET || 'your_jwt_secret_key_change_in_production'
-    );
+    const decoded = jwt.verify(token, process.env.JWT_SECRET);
 
     // Fetch user and verify they exist and are active
     const user = await User.findById(decoded.id);

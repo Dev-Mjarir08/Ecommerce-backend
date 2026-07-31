@@ -230,10 +230,7 @@ class AuthController {
     }
 
     try {
-      const decoded = jwt.verify(
-        rToken,
-        process.env.JWT_REFRESH_SECRET || 'your_jwt_refresh_secret_key_change_in_production'
-      );
+      const decoded = jwt.verify(rToken, process.env.JWT_REFRESH_SECRET);
       const user = await User.findById(decoded.id).select('+refreshToken');
 
       if (!user || user.refreshToken !== rToken) {

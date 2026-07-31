@@ -1,7 +1,9 @@
-import 'dotenv/config';
+import dotenv from 'dotenv';
 import connectDB from './config/db.js';
 import app from './app.js';
 
+// Load environment variables immediately on startup
+dotenv.config();
 
 const PORT = process.env.PORT || 3000;
 
